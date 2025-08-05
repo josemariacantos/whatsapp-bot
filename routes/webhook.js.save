@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const saveUser = require('../saveUser');
-const { getUserState, setUserState } = require('../memory');
-const axios = require('axios');
 
 // Verificación de Webhook (GET)
 router.get('/', (req, res) => {
   const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
+
+const { getUserState, setUserState } = require('../memory');
+const axios = require('axios');
 
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -22,9 +23,6 @@ router.get('/', (req, res) => {
 
 // Recepción de mensajes (POST)
 router.post('/', async (req, res) => {
-  console.log('📩 MENSAJE RECIBIDO:');
-  console.dir(req.body, { depth: null });
-
   try {
     const entry = req.body.entry?.[0];
     const changes = entry?.changes?.[0];
@@ -42,7 +40,6 @@ router.post('/', async (req, res) => {
     if (state.step === 0) {
       await sendMessage(from, '¡Hola! Bienvenido a la Gran Bicicleteada Familiar. Por favor, escribí tu nombre completo.');
       state.step = 1;
-      state.data = {};
       setUserState(from, state);
     } else if (state.step === 1) {
       state.data.nombre = text;
@@ -56,7 +53,7 @@ router.post('/', async (req, res) => {
       setUserState(from, state);
     } else if (state.step === 3) {
       state.data.correo = text;
-      await sendMessage(from, 'Casi listo. Por último, indicá tu género (Masculino/Femenino/Otro).');
+      await sendMessage(from, 'Casi listo. Por último, indicá tu género (Masculino, Femenino, Otro).');
       state.step = 4;
       setUserState(from, state);
     } else if (state.step === 4) {
@@ -65,7 +62,7 @@ router.post('/', async (req, res) => {
       // Guardar en MongoDB
       await saveUser(state.data);
 
-      await sendMessage(from, '¡Gracias por registrarte! Te esperamos en la Gran Bicicleteada Familiar 🎉');
+      await sendMessage(from, '¡Gracias por registrarte! Te esperamos en la Gran Bicicleteada Familiar 🚴‍♂️');
 
       // Reset
       setUserState(from, { step: 0, data: {} });
@@ -77,27 +74,42 @@ router.post('/', async (req, res) => {
 
   res.sendStatus(200);
 });
+router.post('/', (req, res) => {
+  console.log('📩 MENSAJE RECIBIDO:');
+  console.dir(req.body, { depth: null });
 
-// Función para enviar mensajes
-async function sendMessage(to, message) {
-  const url = 'https://graph.facebook.com/v18.0/729200963602734/messages'
-  const token = 'const token = process.env.WHATSAPP_TOKEN'
- // Reemplazá con tus valores reales
+});
+
+// Recepción de mensajes (POST)
+router.post('/', async (req, res) => {
+  console.log('📩 MENSAJE RECIBIDO:');
+  console.dir(req.body, { depth: null });
 
   try {
-    await axios.post(url, {
-      messaging_product: 'whatsapp',
-      to,
-      text: { body: message }
-    }, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-  } catch (err) {
-    console.error('❌ Error al enviar mensaje:', err.response?.data || err.message);
+    const entry = req.body.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const message = changes?.value?.messages?.[0];
+
+    if (message) {
+      const from = message.from; // Número del usuario
+      const name = message.profile?.name || 'Sin nombre';
+
+      const userData = {
+        nombre: name,
+        dni: from, // Temporal, lo vamos a cambiar después por el DNI real
+        genero: 'no especificado',
+        correo: 'no especificado',
+      };
+
+      await saveUser(userData);
+    }
+  } catch (error) {
+    console.error('❌ Error al procesar el mensaje:', error);
   }
-}
+
+  res.sendStatus(200); // Meta necesita esta respuesta
+});
+  res.sendStatus(200); // Importante: responder 200 para que Meta no lo reintente
+});
 
 module.exports = router;
