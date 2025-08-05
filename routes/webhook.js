@@ -3,6 +3,7 @@ const router = express.Router();
 const saveUser = require('../saveUser');
 const { getUserState, setUserState } = require('../memory');
 const axios = require('axios');
+const User = require('../models/User'); // <-- import del modelo
 
 // Verificación de Webhook (GET)
 router.get('/', (req, res) => {
@@ -34,11 +35,25 @@ router.post('/', async (req, res) => {
       return res.sendStatus(200);
     }
 
-    const from = message.from; // número del usuario
+    const from = message.from; // número del usuario (wa_id)
     const text = message.text?.body?.trim();
 
+    // obtener estado en memoria (si hay)
     let state = getUserState(from);
 
+    // 1) Revisar en MongoDB si el usuario ya está registrado
+    //    Esto evita pedir los datos otra vez si ya completó el registro.
+    const existingUser = await User.findOne({ whatsapp: from });
+
+    if (existingUser && state.step === 0) {
+      // Usuario ya registrado y no está en medio del formulario
+      await sendMessage(from, `Hola ${existingUser.nombre || ''}, ya estás registrado en la Gran Bicicleteada Familiar 🎉`);
+      // Si querés, podés ofrecer opciones aquí:
+      // await sendMessage(from, '¿Querés ver tus datos o inscribirte en actividades? Responda "datos" o "actividades".');
+      return res.sendStatus(200);
+    }
+
+    // Si no existe, o está en proceso de completar el formulario, seguimos con el flujo:
     if (state.step === 0) {
       await sendMessage(from, '¡Hola! Bienvenido a la Gran Bicicleteada Familiar. Por favor, escribí tu nombre completo.');
       state.step = 1;
@@ -62,12 +77,15 @@ router.post('/', async (req, res) => {
     } else if (state.step === 4) {
       state.data.genero = text;
 
-      // Guardar en MongoDB
+      // Guardar número de WhatsApp para identificación futura
+      state.data.whatsapp = from;
+
+      // Guardar en MongoDB (saveUser debe usar el modelo Mongoose)
       await saveUser(state.data);
 
       await sendMessage(from, '¡Gracias por registrarte! Te esperamos en la Gran Bicicleteada Familiar 🎉');
 
-      // Reset
+      // Reset del estado en memoria
       setUserState(from, { step: 0, data: {} });
     }
 
@@ -75,14 +93,14 @@ router.post('/', async (req, res) => {
     console.error('❌ Error al procesar el mensaje:', error);
   }
 
+  // Siempre respondemos 200 a Meta
   res.sendStatus(200);
 });
 
 // Función para enviar mensajes
 async function sendMessage(to, message) {
-  const url = 'https://graph.facebook.com/v18.0/729200963602734/messages'
+  const url = 'https://graph.facebook.com/v18.0/729200963602734/messages';
   const token = process.env.WHATSAPP_TOKEN;
- // Reemplazá con tus valores reales
 
   try {
     await axios.post(url, {
