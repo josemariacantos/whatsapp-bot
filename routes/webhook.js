@@ -4,6 +4,7 @@ const saveUser = require('../saveUser');
 const { getUserState, setUserState } = require('../memory');
 const axios = require('axios');
 const User = require('../models/User');
+const openai = require('../openaiClient');  // <-- Importamos el cliente OpenAI
 
 // Función para normalizar número (solo dígitos)
 function normalizeNumber(num) {
@@ -50,7 +51,15 @@ router.post('/', async (req, res) => {
     const existingUser = await User.findOne({ whatsapp: from });
 
     if (existingUser && state.step === 0) {
-      await sendMessage(fromRaw, `Hola ${existingUser.nombre || ''}, ya estás registrado en la Gran Bicicleteada Familiar 🎉`);
+      // Si el usuario escribe algo que no es parte del registro,
+      // interpretamos como pregunta para IA (o responderle con mensaje registrado)
+      if (text.toLowerCase() === 'hola' || text.toLowerCase() === 'hola!') {
+        await sendMessage(fromRaw, `Hola ${existingUser.nombre || ''}, ya estás registrado en la Gran Bicicleteada Familiar 🎉`);
+      } else {
+        // Aquí mandamos la pregunta a ChatGPT
+        const respuesta = await preguntarChatGPT(text);
+        await sendMessage(fromRaw, respuesta);
+      }
       return res.sendStatus(200);
     }
 
@@ -108,6 +117,24 @@ async function sendMessage(to, message) {
     });
   } catch (err) {
     console.error('❌ Error al enviar mensaje:', err.response?.data || err.message);
+  }
+}
+
+// Función para preguntar a ChatGPT usando OpenAI API
+async function preguntarChatGPT(pregunta) {
+  try {
+    const completion = await openai.createChatCompletion({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'Eres un asistente amable que responde preguntas relacionadas con la Gran Bicicleteada Familiar.' },
+        { role: 'user', content: pregunta }
+      ],
+      max_tokens: 150,
+    });
+    return completion.data.choices[0].message.content.trim();
+  } catch (error) {
+    console.error('❌ Error en ChatGPT:', error);
+    return 'Disculpa, tuve un problema para responder tu pregunta. Por favor intenta de nuevo más tarde.';
   }
 }
 
