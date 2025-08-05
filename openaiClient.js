@@ -1,10 +1,8 @@
 // openaiClient.js
-const { Configuration, OpenAIApi } = require('openai');
+const OpenAI = require("openai");
 
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,  // Poné tu API Key en .env
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY, // Tu clave API en el .env
 });
-
-const openai = new OpenAIApi(configuration);
 
 module.exports = openai;
