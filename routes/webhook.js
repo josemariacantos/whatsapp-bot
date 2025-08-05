@@ -81,7 +81,7 @@ router.post('/', async (req, res) => {
 // Función para enviar mensajes
 async function sendMessage(to, message) {
   const url = 'https://graph.facebook.com/v18.0/729200963602734/messages'
-  const token = 'const token = process.env.WHATSAPP_TOKEN'
+  const token = process.env.WHATSAPP_TOKEN;
  // Reemplazá con tus valores reales
 
   try {
