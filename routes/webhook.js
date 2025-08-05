@@ -3,7 +3,12 @@ const router = express.Router();
 const saveUser = require('../saveUser');
 const { getUserState, setUserState } = require('../memory');
 const axios = require('axios');
-const User = require('../models/User'); // <-- import del modelo
+const User = require('../models/User');
+
+// Función para normalizar número (solo dígitos)
+function normalizeNumber(num) {
+  return (num || '').replace(/\D/g, '');
+}
 
 // Verificación de Webhook (GET)
 router.get('/', (req, res) => {
@@ -35,65 +40,53 @@ router.post('/', async (req, res) => {
       return res.sendStatus(200);
     }
 
-    const from = message.from; // número del usuario (wa_id)
+    const fromRaw = message.from; // número original
+    const from = normalizeNumber(fromRaw); // número normalizado
     const text = message.text?.body?.trim();
 
-    // obtener estado en memoria (si hay)
     let state = getUserState(from);
 
-    // 1) Revisar en MongoDB si el usuario ya está registrado
-    //    Esto evita pedir los datos otra vez si ya completó el registro.
+    // 1) Revisar si ya está registrado
     const existingUser = await User.findOne({ whatsapp: from });
 
     if (existingUser && state.step === 0) {
-      // Usuario ya registrado y no está en medio del formulario
-      await sendMessage(from, `Hola ${existingUser.nombre || ''}, ya estás registrado en la Gran Bicicleteada Familiar 🎉`);
-      // Si querés, podés ofrecer opciones aquí:
-      // await sendMessage(from, '¿Querés ver tus datos o inscribirte en actividades? Responda "datos" o "actividades".');
+      await sendMessage(fromRaw, `Hola ${existingUser.nombre || ''}, ya estás registrado en la Gran Bicicleteada Familiar 🎉`);
       return res.sendStatus(200);
     }
 
-    // Si no existe, o está en proceso de completar el formulario, seguimos con el flujo:
+    // 2) Flujo de registro
     if (state.step === 0) {
-      await sendMessage(from, '¡Hola! Bienvenido a la Gran Bicicleteada Familiar. Por favor, escribí tu nombre completo.');
+      await sendMessage(fromRaw, '¡Hola! Bienvenido a la Gran Bicicleteada Familiar. Por favor, escribí tu nombre completo.');
       state.step = 1;
       state.data = {};
       setUserState(from, state);
     } else if (state.step === 1) {
       state.data.nombre = text;
-      await sendMessage(from, 'Gracias. Ahora por favor escribí tu DNI.');
+      await sendMessage(fromRaw, 'Gracias. Ahora por favor escribí tu DNI.');
       state.step = 2;
       setUserState(from, state);
     } else if (state.step === 2) {
       state.data.dni = text;
-      await sendMessage(from, 'Perfecto. Ahora escribí tu correo electrónico.');
+      await sendMessage(fromRaw, 'Perfecto. Ahora escribí tu correo electrónico.');
       state.step = 3;
       setUserState(from, state);
     } else if (state.step === 3) {
       state.data.correo = text;
-      await sendMessage(from, 'Casi listo. Por último, indicá tu género (Masculino/Femenino/Otro).');
+      await sendMessage(fromRaw, 'Casi listo. Por último, indicá tu género (Masculino/Femenino/Otro).');
       state.step = 4;
       setUserState(from, state);
     } else if (state.step === 4) {
       state.data.genero = text;
-
-      // Guardar número de WhatsApp para identificación futura
-      state.data.whatsapp = from;
-
-      // Guardar en MongoDB (saveUser debe usar el modelo Mongoose)
+      state.data.whatsapp = from; // número normalizado
       await saveUser(state.data);
-
-      await sendMessage(from, '¡Gracias por registrarte! Te esperamos en la Gran Bicicleteada Familiar 🎉');
-
-      // Reset del estado en memoria
-      setUserState(from, { step: 0, data: {} });
+      await sendMessage(fromRaw, '¡Gracias por registrarte! Te esperamos en la Gran Bicicleteada Familiar 🎉');
+      setUserState(from, { step: 0, data: {} }); // reset estado
     }
 
   } catch (error) {
     console.error('❌ Error al procesar el mensaje:', error);
   }
 
-  // Siempre respondemos 200 a Meta
   res.sendStatus(200);
 });
 

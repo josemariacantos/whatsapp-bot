@@ -1,16 +1,15 @@
+// models/User.js
 const mongoose = require('mongoose');
 
-// Definir el esquema del usuario
 const userSchema = new mongoose.Schema({
-  nombre: { type: String, required: true },
-  dni: { type: String, required: true },
-  correo: { type: String, required: true },
-  genero: { type: String, required: true },
+  nombre: { type: String, default: '' },
+  dni: { type: String, default: '' },
+  correo: { type: String, default: '' },
+  genero: { type: String, default: '' },
+  whatsapp: { type: String, required: true, unique: true } // clave única para identificar
 }, {
-  timestamps: true // agrega automáticamente createdAt y updatedAt
+  timestamps: true
 });
 
-// Crear el modelo
-const User = mongoose.model('User', userSchema);
-
+const User = mongoose.models.User || mongoose.model('User', userSchema);
 module.exports = User;

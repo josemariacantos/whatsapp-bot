@@ -1,13 +1,36 @@
+// saveUser.js
 const User = require('./models/User');
 
-// Función para guardar un usuario en la base de datos
+function normalizeNumber(num) {
+  return (num || '').replace(/\D/g, ''); // Solo deja números
+}
+
 async function saveUser(userData) {
   try {
-    const user = new User(userData);
-    await user.save();
-    console.log('✅ Usuario guardado en MongoDB:', user);
-  } catch (error) {
-    console.error('❌ Error al guardar el usuario en MongoDB:', error);
+    if (!userData.whatsapp) {
+      console.warn('saveUser: falta campo whatsapp en userData', userData);
+      return null;
+    }
+
+    // Normalizar número antes de guardar
+    const whatsappNormalized = normalizeNumber(userData.whatsapp);
+
+    const filter = { whatsapp: whatsappNormalized };
+    const update = {
+      nombre: userData.nombre || '',
+      dni: userData.dni || '',
+      correo: userData.correo || '',
+      genero: userData.genero || '',
+      whatsapp: whatsappNormalized
+    };
+    const options = { new: true, upsert: true, setDefaultsOnInsert: true };
+
+    const user = await User.findOneAndUpdate(filter, update, options);
+    console.log('✅ Usuario guardado/actualizado en MongoDB:', user.whatsapp);
+    return user;
+  } catch (err) {
+    console.error('❌ Error en saveUser:', err);
+    throw err;
   }
 }
 
