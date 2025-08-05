@@ -1,18 +1,14 @@
-const connectDB = require('./db');
+const User = require('./models/User');
 
+// Función para guardar un usuario en la base de datos
 async function saveUser(userData) {
-  const db = await connectDB();
-  const collection = db.collection('usuarios');
-
-  const existingUser = await collection.findOne({ dni: userData.dni });
-  if (existingUser) {
-    console.log('👤 Usuario ya registrado');
-    return;
+  try {
+    const user = new User(userData);
+    await user.save();
+    console.log('✅ Usuario guardado en MongoDB:', user);
+  } catch (error) {
+    console.error('❌ Error al guardar el usuario en MongoDB:', error);
   }
-
-  await collection.insertOne(userData);
-  console.log('✅ Usuario guardado en MongoDB');
 }
 
 module.exports = saveUser;
-
